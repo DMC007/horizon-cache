@@ -1,9 +1,12 @@
 package org.horizon.factory;
 
+import org.horizon.cache.CacheManager;
 import org.horizon.enums.CacheTypeEnum;
 import org.horizon.enums.SerializerTypeEnum;
+import org.horizon.redis.RedisManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.BinaryJedisPubSub;
 
 /**
  * @author zhaoxun
@@ -37,6 +40,86 @@ public class HorizonCacheFactory {
     private String nodes;
     private String username;
     private String password;
+
+    //原子标识，用来标识当前缓存工厂是否已经停止
+    public volatile boolean isStop = false;
+
+    private CacheManager l1CacheManager;
+    private RedisManager l2CacheManager;
+
+    //订阅通道[简单理解为mq的topic主题]
+    private final String channel = "horizon-cache-channel";
+    private Thread broadcastListenerThread;
+    private BinaryJedisPubSub jedisPubSub;
+
+    /**
+     * 启动缓存工厂
+     */
+    public void start() {
+        isStop = false;
+
+        //校验一级缓存组件名称，暂时只支持caffeine
+        if (!CacheTypeEnum.CAFFEINE.getType().equals(l1CacheProvider)) {
+            throw new RuntimeException("l1 cache only support caffeine cache now!!!");
+        }
+
+        l1CacheManager = new CacheManager(CacheTypeEnum.CAFFEINE, maxSize, expireAfterWrite);
+        l1CacheManager.start();
+
+        //校验二级缓存组件名称，暂时只支持redis
+        if (!CacheTypeEnum.REDIS.getType().equals(l2CacheProvider)) {
+            throw new RuntimeException("l2 cache only support redis cache now!!!");
+        }
+
+        l2CacheManager = new RedisManager(serializer, nodes, username, password);
+        l2CacheManager.start();
+
+        //开启订阅
+        subscribe();
+        log.info("horizon-cache factory start success!!!");
+    }
+
+
+    /**
+     * 开始订阅
+     */
+    public void subscribe() {
+        jedisPubSub = new BinaryJedisPubSub() {
+            @Override
+            public void onMessage(byte[] channel, byte[] message) {
+                //TODO 处理消息
+                super.onMessage(channel, message);
+            }
+
+            @Override
+            public void onSubscribe(byte[] channel, int subscribedChannels) {
+                super.onSubscribe(channel, subscribedChannels);
+            }
+
+            @Override
+            public void onUnsubscribe(byte[] channel, int subscribedChannels) {
+                super.onUnsubscribe(channel, subscribedChannels);
+            }
+        };
+
+        //监听线程启动
+        broadcastListenerThread = new Thread(() -> {
+            while (!isStop) {
+                //TODO 订阅监听
+            }
+        }, "broadcastListenerThread");
+        broadcastListenerThread.setDaemon(true);
+        broadcastListenerThread.start();
+    }
+
+
+    public CacheManager getL1CacheManager() {
+        return l1CacheManager;
+    }
+
+    public RedisManager getL2CacheManager() {
+        return l2CacheManager;
+    }
 
     public String getL1CacheProvider() {
         return l1CacheProvider;
