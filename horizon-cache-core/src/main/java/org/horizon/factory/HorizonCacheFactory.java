@@ -1,12 +1,19 @@
 package org.horizon.factory;
 
+import org.horizon.broadcast.CacheBroadcastMessage;
 import org.horizon.caffeine.CacheManager;
+import org.horizon.caffeine.CacheValue;
 import org.horizon.enums.CacheTypeEnum;
 import org.horizon.enums.SerializerTypeEnum;
+import org.horizon.redis.RedisCache;
 import org.horizon.redis.RedisManager;
+import org.horizon.utils.CacheUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import redis.clients.jedis.BinaryJedisPubSub;
+
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.TimeUnit;
 
 /**
  * @author zhaoxun
@@ -79,6 +86,36 @@ public class HorizonCacheFactory {
         log.info("horizon-cache factory start success!!!");
     }
 
+    public void stop() {
+        isStop = true;
+        if (l1CacheManager != null) {
+            l1CacheManager.stop();
+        }
+        if (l2CacheManager != null) {
+            l2CacheManager.stop();
+        }
+        if (jedisPubSub != null) {
+            //解除订阅后，触发2阶段提交，若广播线程下次执行while则退出循环并结束
+            jedisPubSub.unsubscribe();
+        }
+        if (broadcastListenerThread != null) {
+            try {
+                if (broadcastListenerThread.getState() != Thread.State.TERMINATED) {
+                    broadcastListenerThread.interrupt();
+                    try {
+                        broadcastListenerThread.join();
+                    } catch (Exception e) {
+                        log.error("broadcast listener thread join error:{}", e.getMessage(), e);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("broadcast listener thread stop error:{}", e.getMessage(), e);
+            }
+        }
+
+        log.info("horizon-cache factory stop finish!!!");
+    }
+
 
     /**
      * 开始订阅
@@ -87,31 +124,64 @@ public class HorizonCacheFactory {
         jedisPubSub = new BinaryJedisPubSub() {
             @Override
             public void onMessage(byte[] channel, byte[] message) {
-                //TODO 处理消息
-                super.onMessage(channel, message);
+                //解码消息
+                CacheBroadcastMessage broadcastMessage = SerializerTypeEnum.JAVA.getSerializer().deserialize(message);
+                //拿到通知的最终key
+                String finalKey = CacheUtil.generateKey(broadcastMessage.getCategory(), broadcastMessage.getKey());
+                //获取L2缓存值，用于更新L1缓存
+                CacheValue cacheValue = HorizonCacheFactory.getInstance().getL2CacheManager().getCache().get(finalKey);
+                if (cacheValue == null) {
+                    cacheValue = new CacheValue(null);
+                }
+                //更新L1缓存
+                HorizonCacheFactory.getInstance().getL1CacheManager().getCache(broadcastMessage.getCategory()).set(finalKey, cacheValue);
+                log.info("horizon-cache factory receive broadcast message, key: {}, value: {}", finalKey, cacheValue);
             }
 
             @Override
             public void onSubscribe(byte[] channel, int subscribedChannels) {
-                super.onSubscribe(channel, subscribedChannels);
+                log.info("horizon-cache factory subscribe channel: {}, total channels:{}", new String(channel, StandardCharsets.UTF_8), subscribedChannels);
             }
 
             @Override
             public void onUnsubscribe(byte[] channel, int subscribedChannels) {
-                super.onUnsubscribe(channel, subscribedChannels);
+                log.info("horizon-cache factory unsubscribe channel: {}, total channels:{}", new String(channel, StandardCharsets.UTF_8), subscribedChannels);
             }
         };
 
         //监听线程启动
         broadcastListenerThread = new Thread(() -> {
             while (!isStop) {
-                //TODO 订阅监听
+                //开启订阅监听线程
+                while (!isStop) {
+                    try {
+                        RedisCache redisCache = (RedisCache) l2CacheManager.getCache();
+                        //这个方法会一直阻塞当前线程，直到发生异常或手动取消订阅
+                        redisCache.subscribe(channel, jedisPubSub);
+                    } catch (Exception e) {
+                        log.error("broadcast listener thread error", e);
+                        try {
+                            TimeUnit.SECONDS.sleep(3);
+                        } catch (InterruptedException e1) {
+                            log.error("broadcast listener [catch] thread error", e1);
+                        }
+                    }
+                }
             }
         }, "broadcastListenerThread");
         broadcastListenerThread.setDaemon(true);
         broadcastListenerThread.start();
     }
 
+    /**
+     * 广播消息
+     *
+     * @param message 广播消息
+     */
+    public void broadcast(CacheBroadcastMessage message) {
+        RedisCache redisCache = (RedisCache) l2CacheManager.getCache();
+        redisCache.publish(channel, message);
+    }
 
     public CacheManager getL1CacheManager() {
         return l1CacheManager;
