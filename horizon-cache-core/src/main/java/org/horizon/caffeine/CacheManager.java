@@ -32,13 +32,13 @@ public class CacheManager {
     }
 
     /**
-     * 启动缓存服务扩展方法
+     * 启动缓存服务
      */
     public void start() {
     }
 
     /**
-     * 停止缓存服务扩展方法
+     * 停止缓存服务
      */
     public void stop() {
     }

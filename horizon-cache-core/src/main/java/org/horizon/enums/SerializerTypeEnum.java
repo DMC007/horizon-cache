@@ -8,8 +8,7 @@ import org.horizon.serialize.impl.JavaSerializer;
  * @date 2025/12/4
  */
 public enum SerializerTypeEnum {
-    JAVA("java", new JavaSerializer())
-    ;
+    JAVA("java", new JavaSerializer());
 
     private String type;
     private Serializer serializer;
@@ -27,12 +26,12 @@ public enum SerializerTypeEnum {
         return serializer;
     }
 
-    public static SerializerTypeEnum match(String name, SerializerTypeEnum defaultItem) {
+    public static SerializerTypeEnum match(String name) {
         for (SerializerTypeEnum item : SerializerTypeEnum.values()) {
             if (item.name().equals(name)) {
                 return item;
             }
         }
-        return defaultItem;
+        return null;
     }
 }
