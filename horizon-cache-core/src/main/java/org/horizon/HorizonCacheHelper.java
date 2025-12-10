@@ -19,6 +19,13 @@ public class HorizonCacheHelper {
 
     private static final ConcurrentHashMap<String, HorizonCache> cacheMap = new ConcurrentHashMap<>();
 
+    /**
+     * 获取缓存对象
+     *
+     * @param categoryName 缓存分类名称
+     * @param survivalTime 缓存存活时间，单位毫秒，-1表示永久存活
+     * @return 缓存对象
+     */
     public static HorizonCache getCache(String categoryName, long survivalTime) {
         if (categoryName == null || categoryName.isEmpty()) {
             throw new RuntimeException("categoryName can not be null or empty");
@@ -33,6 +40,12 @@ public class HorizonCacheHelper {
         });
     }
 
+    /**
+     * 获取缓存对象
+     *
+     * @param categoryName 缓存分类名称
+     * @return 缓存对象
+     */
     public static HorizonCache getCache(String categoryName) {
         return getCache(categoryName, -1);
     }
@@ -54,6 +67,12 @@ public class HorizonCacheHelper {
             this.survivalTime = -1;
         }
 
+        /**
+         * 设置缓存
+         *
+         * @param key   缓存key
+         * @param value 缓存value
+         */
         public void set(String key, Object value) {
             String finalKey = CacheUtil.generateKey(category, key);
             CacheValue cacheValue = new CacheValue(value, survivalTime);
@@ -67,6 +86,12 @@ public class HorizonCacheHelper {
             HorizonCacheFactory.getInstance().broadcast(new CacheBroadcastMessage(category, key));
         }
 
+        /**
+         * 获取缓存
+         *
+         * @param key 缓存key
+         * @return 缓存value
+         */
         public <T> T get(String key) {
             String finalKey = CacheUtil.generateKey(category, key);
 
@@ -97,6 +122,11 @@ public class HorizonCacheHelper {
             }
         }
 
+        /**
+         * 删除缓存
+         *
+         * @param key 缓存key
+         */
         public void delete(String key) {
             String finalKey = CacheUtil.generateKey(category, key);
 
@@ -110,6 +140,24 @@ public class HorizonCacheHelper {
 
             //广播,通知其他服务更新自己的本地L1缓存
             HorizonCacheFactory.getInstance().broadcast(new CacheBroadcastMessage(category, key));
+        }
+
+        /**
+         * 判断缓存是否存在
+         *
+         * @param key 缓存key
+         * @return 缓存是否存在
+         */
+        public boolean exists(String key) {
+            String finalKey = CacheUtil.generateKey(category, key);
+            Boolean exists = HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).exists(finalKey);
+            if (exists == null) {
+                //缓存不存在，则尝试从L2缓存中获取并设置到L1缓存
+                get(key);
+            }
+            //再次尝试从L1缓存中获取
+            exists = HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).exists(finalKey);
+            return exists;
         }
     }
 }
