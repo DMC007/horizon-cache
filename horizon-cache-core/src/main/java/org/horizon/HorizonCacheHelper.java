@@ -1,5 +1,9 @@
 package org.horizon;
 
+import org.horizon.broadcast.CacheBroadcastMessage;
+import org.horizon.caffeine.CacheValue;
+import org.horizon.factory.HorizonCacheFactory;
+import org.horizon.utils.CacheUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,6 +52,64 @@ public class HorizonCacheHelper {
         public HorizonCache(String category) {
             this.category = category;
             this.survivalTime = -1;
+        }
+
+        public void set(String key, Object value) {
+            String finalKey = CacheUtil.generateKey(category, key);
+            CacheValue cacheValue = new CacheValue(value, survivalTime);
+            //存入L1缓存
+            HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).set(finalKey, cacheValue);
+            log.debug("HorizonCache, set l1-cache, key:{}, value:{}", finalKey, cacheValue);
+            //存入L2缓存
+            HorizonCacheFactory.getInstance().getL2CacheManager().getCache().set(finalKey, cacheValue);
+            log.debug("HorizonCache, set l2-cache, key:{}, value:{}", finalKey, cacheValue);
+            //广播,通知其他服务去redis获取最新的值，并更新自己的本地L1缓存
+            HorizonCacheFactory.getInstance().broadcast(new CacheBroadcastMessage(category, key));
+        }
+
+        public <T> T get(String key) {
+            String finalKey = CacheUtil.generateKey(category, key);
+
+            //先看本地L1缓存
+            CacheValue l1CacheValue = HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).get(finalKey);
+            if (l1CacheValue != null) {
+                //先看下是否还有效
+                if (l1CacheValue.isValid()) {
+                    log.debug("HorizonCache, get l1-cache, key:{}, value:{}", finalKey, l1CacheValue);
+                    return (T) l1CacheValue.getValue();
+                }
+                return null;
+            }
+
+            //再看远程redis的L2缓存
+            CacheValue l2CacheValue = HorizonCacheFactory.getInstance().getL2CacheManager().getCache().get(finalKey);
+            log.debug("HorizonCache, get l2-cache, key:{}, value:{}", finalKey, l2CacheValue);
+            if (l2CacheValue != null) {
+                //L2缓存在存入redis的时候已经设置了过期时间，所以这里查出值说明还没到过期时间，故不用像L1缓存一样判断是否还有效
+                //返回值前先给L1缓存赋值
+                HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).set(finalKey, l2CacheValue);
+                log.debug("HorizonCache, lazy set l1-cache, key:{}, value:{}", finalKey, l2CacheValue);
+                return (T) l2CacheValue.getValue();
+            } else {
+                HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).set(finalKey, new CacheValue(null));
+                log.debug("HorizonCache, lazy set l2-cache, key:{}, value:{}", finalKey, null);
+                return null;
+            }
+        }
+
+        public void delete(String key) {
+            String finalKey = CacheUtil.generateKey(category, key);
+
+            //删除L1缓存
+            HorizonCacheFactory.getInstance().getL1CacheManager().getCache(category).delete(finalKey);
+            log.debug("HorizonCache, delete l1-cache, key:{}", finalKey);
+
+            //删除L2缓存
+            HorizonCacheFactory.getInstance().getL2CacheManager().getCache().delete(finalKey);
+            log.debug("HorizonCache, delete l2-cache, key:{}", finalKey);
+
+            //广播,通知其他服务更新自己的本地L1缓存
+            HorizonCacheFactory.getInstance().broadcast(new CacheBroadcastMessage(category, key));
         }
     }
 }
