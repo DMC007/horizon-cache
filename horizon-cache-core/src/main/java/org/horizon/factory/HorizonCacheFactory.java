@@ -1,6 +1,6 @@
 package org.horizon.factory;
 
-import org.horizon.cache.CacheManager;
+import org.horizon.caffeine.CacheManager;
 import org.horizon.enums.CacheTypeEnum;
 import org.horizon.enums.SerializerTypeEnum;
 import org.horizon.redis.RedisManager;
