@@ -2,9 +2,11 @@ package org.horizon.redis;
 
 import org.horizon.cache.Cache;
 import org.horizon.caffeine.CacheValue;
+import org.horizon.enums.SerializerTypeEnum;
 import org.horizon.serialize.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import redis.clients.jedis.BinaryJedisPubSub;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisCluster;
 import redis.clients.jedis.JedisPool;
@@ -111,5 +113,48 @@ public class RedisCache implements Cache {
             }
         }
         return false;
+    }
+
+    //------核心-------
+
+
+    public void publish(String channel, Object message) {
+        byte[] bytes = SerializerTypeEnum.JAVA.getSerializer().serialize(message);
+        if (jedisCluster != null) {
+            try {
+                jedisCluster.publish(channel.getBytes(StandardCharsets.UTF_8), bytes);
+            } catch (Exception e) {
+                log.error("RedisCache publish error:{}", e.getMessage(), e);
+            }
+        } else {
+            try (Jedis jedis = jedisPool.getResource()) {
+                jedis.publish(channel.getBytes(StandardCharsets.UTF_8), bytes);
+            } catch (Exception e) {
+                log.error("RedisCache publish error:{}", e.getMessage(), e);
+            }
+        }
+    }
+
+
+    /**
+     * 订阅
+     *
+     * @param channel     订阅的频道
+     * @param jedisPubSub 订阅的回调
+     */
+    public void subscribe(String channel, BinaryJedisPubSub jedisPubSub) {
+        if (jedisCluster != null) {
+            try {
+                jedisCluster.subscribe(jedisPubSub, channel.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                log.error("RedisCache subscribe error:{}", e.getMessage(), e);
+            }
+        } else {
+            try (Jedis jedis = jedisPool.getResource()) {
+                jedis.subscribe(jedisPubSub, channel.getBytes(StandardCharsets.UTF_8));
+            } catch (Exception e) {
+                log.error("RedisCache subscribe error:{}", e.getMessage(), e);
+            }
+        }
     }
 }
