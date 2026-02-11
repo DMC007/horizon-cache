@@ -1,5 +1,5 @@
 <p align="center">
-    <h3 align="center">XXL-CACHE</h3>
+    <h3 align="center">HORIZON-CACHE</h3>
     <p align="center">
         HORIZON-CACHE is a simple multi-level cache framework.
         <br/>
