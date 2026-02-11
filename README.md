@@ -20,6 +20,13 @@ HORIZON-CACHE（名称前缀来源索尼地平线系列游戏） 是一个简单
     <version>${最新稳定版}</version>
 </dependency>
 ```
+### Reference code location
+参考代码位置: 与springboot整合，参考horizon-cache-samples/horizon-cache-sample-springboot
+
+### 环境
+Maven：3+<br>
+Jdk：17+
+
 配置说明
 ```properties
 # horizon-cache
@@ -36,7 +43,7 @@ horizon.cache.l2.serializer=java
 ## L2缓存节点配置，多个节点用逗号分隔；例如 “127.0.0.1:6379”、“127.0.0.1:6379,127.0.0.1:6380”
 horizon.cache.l2.nodes=127.0.0.1:6379
 ## L2缓存用户名配置
-horizon.cache.l2.user=
+horizon.cache.l2.username=
 ## L2缓存密码配置
 horizon.cache.l2.password=
 ## L2缓存数据库设置，默认0
@@ -54,4 +61,3 @@ horizon.cache.l2.database=0
 - 8、缓存风险治理：对于常见缓存问题，如缓存穿透，底层进行针对性设计进行风险防护；
 - 9、透明接入：屏蔽底层实现细节，降低业务开发和学习成本；
 - 10、多序列化协议支持：组件化抽象Serializer，可灵活扩展更多序列化协议；
-

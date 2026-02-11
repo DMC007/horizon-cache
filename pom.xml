@@ -10,6 +10,7 @@
 
     <modules>
         <module>horizon-cache-core</module>
+        <module>horizon-cache-samples</module>
     </modules>
 
     <properties>
