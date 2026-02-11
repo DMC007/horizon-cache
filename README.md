@@ -55,12 +55,3 @@ horizon.cache.l2.database=0
 - 9、透明接入：屏蔽底层实现细节，降低业务开发和学习成本；
 - 10、多序列化协议支持：组件化抽象Serializer，可灵活扩展更多序列化协议；
 
-
-## Copyright and License
-This product is open source and free, and will continue to provide free community technical support. Individual or enterprise users are free to access and use.
-
-- Licensed under the Apache License, Version 2.0.
-- Copyright (c) 2015-present, xuxueli.
-
-产品开源免费，并且将持续提供免费的社区技术支持。个人或企业内部可自由的接入和使用。
-
